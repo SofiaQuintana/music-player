@@ -1,0 +1,346 @@
+package interpreter.parser;
+
+import java_cup.runtime.Symbol;
+import interpreter.lexer.MusicLexer;
+import java.util.HashMap;
+import java.util.LinkedList;
+
+import dummy_classes.Array;
+import dummy_classes.Case;
+
+import interpreter.abstract_syntax_tree.environment.GlobalError;
+import interpreter.abstract_syntax_tree.environment.EnumType;
+
+import interpreter.abstract_syntax_tree.instruction.Instruction;
+import interpreter.abstract_syntax_tree.instruction.NoteType;
+import interpreter.abstract_syntax_tree.instruction.Track;
+import interpreter.abstract_syntax_tree.instruction.Declaration;
+import interpreter.abstract_syntax_tree.instruction.Assignation;
+import interpreter.abstract_syntax_tree.instruction.Break;
+import interpreter.abstract_syntax_tree.instruction.Continue;
+import interpreter.abstract_syntax_tree.instruction.Return;
+import interpreter.abstract_syntax_tree.instruction.Expression;
+import interpreter.abstract_syntax_tree.instruction.ExpressionType;
+import interpreter.abstract_syntax_tree.instruction.FunctionCall;
+import interpreter.abstract_syntax_tree.instruction.PrincipalFunction;
+import interpreter.abstract_syntax_tree.instruction.If;
+import interpreter.abstract_syntax_tree.instruction.For;
+import interpreter.abstract_syntax_tree.instruction.While;
+import interpreter.abstract_syntax_tree.instruction.DoWhile;
+import interpreter.abstract_syntax_tree.instruction.Switch;
+import interpreter.abstract_syntax_tree.instruction.Function;
+
+parser code {:
+    public  LinkedList<Instruction> AST;
+    private LinkedList<GlobalError> errors;
+
+    public MusicParser(MusicLexer lexer, LinkedList<GlobalError> errors) {
+        super(lexer);
+        this.errors = errors;
+    }
+
+    public void syntax_error(Symbol symbol) {
+        System.out.println("error sintactico en: " + symbol.sym);
+        //GlobalError error = new GlobalError("pintura", "sintactico", (String)symbol.value, "No se esperaba el elemento: ", symbol.right,(symbol.left - 1));
+        //errors.add(error);
+    }
+
+    public void unrecovered_syntax_error(Symbol s) throws java.lang.Exception { 
+        System.err.println("Error sintactico irrecuperable en la Linea " + (s.left) + " Columna "+s.right+". Componente " + s.value + " no reconocido."); 
+    }
+
+:}
+
+/* Terminales... (tokens RESULT by the scanner) */
+terminal String  CARACTER, CADENA, ID; 
+terminal String  PA, PC, LLA, LLC, CA, CC, COMMA, SEMICOLON;
+terminal String  RR, PP, PLUSEQ, MOD, POT, DIV, MULT, REST, PLUS, EQ;
+terminal String  XOR, NOR, OR, NAND, AND, NOT;
+terminal String  NULO, MENEQ, MAYEQ, MEN, MAY, NEQ, SAME;
+terminal String  DEDENT, INDENT, SL;
+terminal String  PISTA, EXT, KEEP, TRUE, FALSE, VAR, INT, DOUBLE, BOOL, CHAR, STRING, ARR, 
+                 SI, SINO, SWITCH, CASE, DEF, PARA, WHILE, HACER, SALIR, CONT, RETURN, PLAY,
+                 WAIT, ORDER, ASC, DESC, PAR, IMPAR, PRIMOS, SUM, LONG, MENSAJE, PRINCIPAL;
+terminal String  DO, DO8, RE, RE8, MI, MI8, FA, FA8, SOL, SOL8, LA, LA8, SI8;
+terminal Integer ENTERO;
+terminal Double  DOBLE;
+
+/* No Terminales... */
+non terminal starting;
+non terminal LinkedList<Instruction> blocks, main_instructions, instructions, block, p_block;
+non terminal Track track_block;
+non terminal LinkedList<String> ext_list, d_list;
+non terminal Instruction m_instruction, instruction;
+non terminal Declaration declaration, dec_simple, k_declaration; 
+non terminal LinkedList<Array> array_id;
+non terminal LinkedList<Expression> dimension_list, a_list;
+non terminal LinkedList<LinkedList> a_options, array_assignation, nested_cb;
+non terminal EnumType d_type;
+non terminal Assignation assignation;
+non terminal PrincipalFunction principal_function;
+non terminal If if_ins, else_ins;
+non terminal LinkedList<If> else_if;
+non terminal For for_ins;
+non terminal While while_ins;
+non terminal DoWhile do_while;
+non terminal Switch switch_ins;
+non terminal Expression inc_dec, expression;
+non terminal LinkedList<Case> case_list;
+non terminal NoteType notes;
+non terminal Function function;
+non terminal String function_id;
+non terminal LinkedList<Declaration> param_list; 
+
+precedence left OR, NOR, XOR;
+precedence left SAME, NEQ, MAY, MEN, MENEQ, MAYEQ;
+precedence left PLUS, REST;
+precedence left AND, NAND, MOD, DIV, MULT;
+precedence left POT;
+precedence right NULO, NOT;
+
+/* Grammar */
+start with starting;
+
+starting ::= blocks:i {: AST = i; :}
+;
+
+blocks ::= blocks:bl track_block:b 
+           {: RESULT = bl; 
+              RESULT.add(b); 
+           :}
+           | track_block:b
+           {: RESULT = new LinkedList<>(); 
+              RESULT.add(b); 
+           :}
+;
+
+track_block ::= PISTA ID:i EXT ext_list:el p_block:ins {: RESULT = new Track(i, iright, ileft-1, el, ins); :}
+                | PISTA ID:i p_block:ins               {: RESULT = new Track(i, iright, ileft-1, ins); :}
+; 
+
+ext_list ::= ext_list:el COMMA ID:i     {: RESULT = el; RESULT.add(i); :}
+             | ID:i                     {: RESULT = new LinkedList<>(); RESULT.add(i); :}
+;
+
+main_instructions ::= main_instructions:il m_instruction:i     {: RESULT = il; RESULT.add(i); :}
+                 | m_instruction:i                             {: RESULT = new LinkedList<>(); RESULT.add(i); :}
+;
+
+m_instruction ::= declaration:d              {: RESULT = d; :}
+                  | k_declaration:kd         {: RESULT = kd; :}
+                  | function:f                 {: RESULT = f; :}
+                  | principal_function:pf      {: RESULT = pf; :}
+                  | SL
+;
+
+instructions ::= instructions:il instruction:i  {: RESULT = il; RESULT.add(i); :}
+                 | instruction:i                {: RESULT = new LinkedList<>(); RESULT.add(i); :}
+;
+
+/*I can considerate as an option add INDENT at the beginning of every instruction, 
+    but at this point is just a possibility */
+instruction ::= declaration:d SL            {: RESULT = d; :}
+                | assignation:a SL          {: RESULT = a; :}
+                | if_ins:i                  {: RESULT = i; :}
+                | for_ins:f                 {: RESULT = f; :}
+                | while_ins:w               {: RESULT = w; :}
+                | do_while:dw               {: RESULT = dw; :}
+                | switch_ins:s              {: RESULT = s; :}
+                | SALIR:s SL                {: RESULT = new Break(sright, sleft-1); :}
+                | CONT:c SL                 {: RESULT = new Continue(cright, cleft-1); :}
+                | RETURN:r expression:e SL  {: RESULT = new Return(e,rright, rleft-1); :}
+                | inc_dec:r SL              {: RESULT = r; :}
+                | SL
+;
+
+p_block ::= SL INDENT main_instructions:il DEDENT      {: RESULT = il; :}
+          | SL block:b                                 {: RESULT = b; :}
+;
+
+block ::= SL INDENT instructions:il DEDENT      {: RESULT = il; :}
+          | SL block:b                          {: RESULT = b; :}
+;
+
+declaration ::= VAR:v d_type:dt d_list:dl EQ expression:e                   {: RESULT = new Declaration(dt, dl, e, vright, vleft-1, false); :}
+                | VAR:v d_type:dt d_list:dl                                 {: RESULT = new Declaration(dt, dl, null, vright, vleft-1, false); :}
+                | VAR:v d_type:dt ARR array_id:al                           {: RESULT = new Declaration(dt, al, null, vright, vleft-1, false); :}
+                | VAR:v d_type:dt ARR array_id:al EQ LLA a_options:el LLC   {: RESULT = new Declaration(dt, al, el, vright, vleft-1, false); :}
+;
+
+//returns a declaration 
+dec_simple ::= VAR:v d_type:dt ID:i EQ expression:e        {: RESULT = new Declaration(dt, i, e, vright, vleft-1, false); :}
+;
+
+k_declaration ::=  KEEP:k VAR d_type:dt d_list:dl EQ expression:e                 {: RESULT = new Declaration(dt, dl, e, kright, kleft-1, true); :}
+                   | KEEP:k VAR d_type:dt d_list:dl                               {: RESULT = new Declaration(dt, dl, null, kright, kleft-1, true); :}
+                   | KEEP:k VAR d_type:dt ARR array_id:al                         {: RESULT = new Declaration(dt, al, null, kright, kleft-1, true); :}
+                   | KEEP:k VAR d_type:dt ARR array_id:al EQ LLA a_options:el LLC {: RESULT = new Declaration(dt, al, el, kright, kleft-1, true); :}
+;
+
+/*devuelve linkedlist de array*/
+array_id ::= array_id:il COMMA ID:i dimension_list:dl  {: RESULT = il; RESULT.add(new Array(iright, ileft-1, i, dl)); :}
+              | ID:i dimension_list:dl                 {: RESULT = new LinkedList<>(); RESULT.add(new Array(iright, ileft-1, i, dl)); :}
+;
+
+// returns a string list
+d_list ::= d_list:il COMMA ID:id    {: RESULT = il; RESULT.add(id); :}
+           | ID:id                  {: RESULT = new LinkedList<>(); RESULT.add(id); :}
+;
+
+//returns an expression list
+dimension_list ::= dimension_list:dl CA expression:e CC    {: RESULT = dl; RESULT.add(e); :}
+                   | CA expression:e CC                    {: RESULT = new LinkedList<>(); RESULT.add(e); :}
+;
+
+a_options ::= array_assignation:lle     {: RESULT = lle; :}
+              | nested_cb:lle           {: RESULT = lle; :}
+;
+
+/* simple assignation */
+array_assignation ::= array_assignation:a a_list:al   {: RESULT = a; RESULT.add(al); :}
+                      | a_list:al                     {: RESULT = new LinkedList<>(); RESULT.add(al); :}
+;
+
+/* nested {} assignation */
+//returns a linkedlist of linkedlist expressions
+nested_cb ::= nested_cb:nl COMMA LLA a_list:al LLC      {: RESULT = nl; RESULT.add(al); :}
+              | LLA a_list:al LLC                       {: RESULT = new LinkedList<>(); RESULT.add(al); :}
+;
+
+//returns an expression list
+a_list ::= a_list:al COMMA expression:e {: RESULT = al; RESULT.add(e); :}
+           | expression:e               {: RESULT = new LinkedList<>(); RESULT.add(e); :}
+;
+d_type ::= INT          {: RESULT = EnumType.entero; :}
+           | DOUBLE     {: RESULT = EnumType.doble; :}
+           | BOOL       {: RESULT = EnumType.booleano; :}
+           | CHAR       {: RESULT = EnumType.caracter; :}
+           | STRING     {: RESULT = EnumType.cadena; :}
+;
+
+assignation ::= ID:i EQ expression:e                     {: RESULT = new Assignation(i, e, false, iright, ileft-1); :}
+                | ID:i PLUSEQ expression:e               {: RESULT = new Assignation(i, e, true, iright, ileft-1); :}
+                | ID:i dimension_list:dl EQ expression:e {: RESULT = new Assignation(new Array(iright, ileft-1, i, dl)); :}
+;
+
+principal_function ::= PRINCIPAL:p PA PC block:il          {: RESULT = new PrincipalFunction(il, pright, pleft-1); :}  
+                       | KEEP:p PRINCIPAL PA PC block:il   {: RESULT = new PrincipalFunction(il, pright, pleft-1); :}  
+;
+
+if_ins ::=  SI:s PA expression:e PC block:il                           {: RESULT = new If(null, e, il, null, sright, sleft-1); :}
+            | SI:s PA expression:e PC block:il else_ins:ei             {: RESULT = new If(ei, e, il, null, sright, sleft-1); :}
+            | SI:s PA expression:e PC block:il else_if:el              {: RESULT = new If(null, e, il, el, sright, sleft-1); :}
+            | SI:s PA expression:e PC block:il else_if:el else_ins:ei  {: RESULT = new If(ei, e, il, el, sright, sleft-1); :}
+;
+
+else_ins ::= SINO:s block:il {: RESULT = new If(null, null, il, null, sright, sleft-1); :}
+;
+
+else_if ::= else_if:el SINO:s SI PA expression:e PC block:il  {: RESULT = el; RESULT.add(new If(null, e, il, null, sright, sleft-1)); :}
+            | SINO:s SI PA expression:e PC block:il           {: RESULT = new LinkedList<>(); RESULT.add(new If(null, e, il, null, sright, sleft-1)); :}
+;
+
+for_ins ::= PARA:p PA assignation:a SEMICOLON expression:e SEMICOLON assignation:a2 PC block:il  {: RESULT = new For(a, e, a2, il, pright, pleft-1); :} 
+            | PARA:p PA assignation:a SEMICOLON expression:e SEMICOLON inc_dec:a2 PC block:il    {: RESULT = new For(a, e, a2, il, pright, pleft-1); :} 
+            | PARA:p PA dec_simple:a SEMICOLON expression:e SEMICOLON assignation:a2 PC block:il {: RESULT = new For(a, e, a2, il, pright, pleft-1); :} 
+            | PARA:p PA dec_simple:a SEMICOLON expression:e SEMICOLON inc_dec:a2 PC block:il     {: RESULT = new For(a, e, a2, il, pright, pleft-1); :} 
+;
+
+inc_dec ::= ID:i PP     {: RESULT = new Expression(ExpressionType.increase, null, null, i, iright, ileft-1); :}
+            | ID:i RR   {: RESULT = new Expression(ExpressionType.decrease, null, null, i, iright, ileft-1); :}
+;
+
+while_ins ::= WHILE:m PA expression:e PC block:il {: RESULT = new While(e, il, mright, mleft-1); :}
+;
+
+do_while ::= HACER:h block:il WHILE PA expression:e PC SL {: RESULT = new DoWhile(e, il, hright, hleft-1); :}
+;
+
+switch_ins ::= SWITCH:s PA expression:e PC SL case_list:cl {: RESULT = new Switch(e, cl, sright, sleft-1); :}
+;
+
+case_list ::= case_list:cl CASE:c expression:e block:il {: RESULT = cl; RESULT.add(new Case(e, il, cright, cleft-1)); :}
+              | case_list:cl DEF:c block:il             {: RESULT = cl; RESULT.add(new Case(null, il, cright, cleft-1)); :}
+              | CASE:c expression:e block:il            {: RESULT = new LinkedList<>(); RESULT.add(new Case(e, il, cright, cleft-1)); :}
+;
+
+function ::= d_type:t function_id:i PA PC block:il                  {: RESULT = new Function(t, i, null, il, false, tright, tleft-1); :}
+             | d_type:t function_id:i PA param_list:pl PC block:il  {: RESULT = new Function(t, i, pl, il, false, tright, tleft-1); :}
+            | function_id:i PA PC block:il                          {: RESULT = new Function(null, i, null, il, false, iright, ileft-1); :}
+             | function_id:i PA param_list:pl PC block:il           {: RESULT = new Function(null, i, pl, il, false, iright, ileft-1); :}
+             | KEEP:k d_type:t function_id:i PA PC block:il         {: RESULT = new Function(t, i, null, il, true, tright, tleft-1); :}
+             | KEEP:k d_type:t function_id:i PA param_list:pl PC block:il {: RESULT = new Function(t, i, pl, il, true, tright, tleft-1); :}
+             | KEEP:k function_id:i PA PC block:il                        {: RESULT = new Function(null, i, null, il, true, iright, ileft-1); :}
+             | KEEP:k function_id:i PA param_list:pl PC block:il          {: RESULT = new Function(null, i, pl, il, true, iright, ileft-1); :}
+;
+
+function_id ::= ID:i        {: RESULT = i; :}
+                | PLAY:i    {: RESULT = i; :}
+                | WAIT:i    {: RESULT = i; :}
+                | ORDER:i   {: RESULT = i; :}
+                | SUM:i     {: RESULT = i; :}
+                | LONG:i    {: RESULT = i; :}
+                | MENSAJE:i {: RESULT = i; :}
+;
+
+param_list ::= param_list:pl COMMA d_type:t ID:i    {: RESULT = pl; RESULT.add(new Declaration(t, i, null, tright, tleft-1, false)); :}
+               | d_type:t ID:i                      {: RESULT = new LinkedList<>(); RESULT.add(new Declaration(t, i, null, tright, tleft-1, false)); :}
+;
+
+/*predefined_function ::= PLAY PA notes:n COMMA expression:e COMMA expression:e COMMA expression:e PC;*/
+
+notes ::= DO        {: RESULT = NoteType.do_; :}
+          | RE      {: RESULT = NoteType.re; :}
+          | MI      {: RESULT = NoteType.mi; :}
+          | FA      {: RESULT = NoteType.fa; :}
+          | SOL     {: RESULT = NoteType.sol; :}
+          | LA      {: RESULT = NoteType.la; :}
+          | SI      {: RESULT = NoteType.si; :}
+          | DO8     {: RESULT = NoteType.do8; :}
+          | RE8     {: RESULT = NoteType.re8; :}
+          | MI8     {: RESULT = NoteType.mi8; :}
+          | FA8     {: RESULT = NoteType.fa8; :}
+          | SOL8    {: RESULT = NoteType.sol8; :}
+          | LA8     {: RESULT = NoteType.la8; :}
+          | SI8     {: RESULT = NoteType.si8; :}
+;
+
+expression ::= expression:e1 PLUS:p expression:e2     {: RESULT = new Expression(ExpressionType.sum, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 REST:p expression:e2   {: RESULT = new Expression(ExpressionType.rest, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 MULT:p expression:e2   {: RESULT = new Expression(ExpressionType.multiplication, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 DIV:p expression:e2    {: RESULT = new Expression(ExpressionType.division, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 MOD:p expression:e2    {: RESULT = new Expression(ExpressionType.modulo, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 POT:p expression:e2    {: RESULT = new Expression(ExpressionType.potencia, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 SAME:p expression:e2   {: RESULT = new Expression(ExpressionType.equal, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 NEQ:p expression:e2    {: RESULT = new Expression(ExpressionType.different, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 MAY:p expression:e2    {: RESULT = new Expression(ExpressionType.greater_than, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 MEN:p expression:e2    {: RESULT = new Expression(ExpressionType.smaller_than, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 MAYEQ:p expression:e2  {: RESULT = new Expression(ExpressionType.greater_equal, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 MENEQ:p expression:e2  {: RESULT = new Expression(ExpressionType.smaller_equal, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 AND:p expression:e2    {: RESULT = new Expression(ExpressionType.and, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 NAND:p expression:e2   {: RESULT = new Expression(ExpressionType.nand, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 OR:p expression:e2     {: RESULT = new Expression(ExpressionType.or, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 NOR:p expression:e2    {: RESULT = new Expression(ExpressionType.nor, e1, e2, null, pright, pleft-1); :}
+               | expression:e1 XOR:p expression:e2    {: RESULT = new Expression(ExpressionType.xor, e1, e2, null, pright, pleft-1); :}
+               | NULO:p expression:e1                 {: RESULT = new Expression(ExpressionType.is_null, e1, null, null, pright, pleft-1); :}
+               | NOT:p expression:e1                  {: RESULT = new Expression(ExpressionType.not, e1, null, null, pright, pleft-1); :}
+               | REST:p expression:e1                 {: RESULT = new Expression(ExpressionType.negative, e1, null, null, pright, pleft-1); :}
+               | PA:p expression:e1 PC                {: RESULT = e1; :}
+               | ENTERO:e                             {: RESULT = new Expression(ExpressionType.integer, null, null, (long) e, eright, eleft-1); :}
+               | DOBLE:e                              {: RESULT = new Expression(ExpressionType.doble, null, null, e, eright, eleft-1); :}  
+               | CADENA:e                             {: RESULT = new Expression(ExpressionType.string, null, null, e, eright, eleft-1); :}
+               | CARACTER:e                           {: RESULT = new Expression(ExpressionType.character, null, null, e.charAt(1), eright, eleft-1); :}
+               | ID:e                                 {: RESULT = new Expression(ExpressionType.id, null, null, e, eright, eleft-1); :}
+               | ID:e dimension_list:dl               {: RESULT = new Expression(ExpressionType.array, new Array(eright, eleft-1,e, dl)); :}
+               | TRUE:e                               {: RESULT = new Expression(ExpressionType.bool, null, null, true, eright, eleft-1); :}                                
+               | FALSE:e                              {: RESULT = new Expression(ExpressionType.bool, null, null, false, eright, eleft-1); :}
+               | inc_dec:e                            {: RESULT = e; :}
+;
+               
+
+               
+      
+                
+                
+
+
