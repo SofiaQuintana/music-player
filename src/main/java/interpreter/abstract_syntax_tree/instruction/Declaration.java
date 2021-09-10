@@ -76,41 +76,71 @@ public class Declaration implements Instruction, Serializable {
 
     @Override
     public Object execute(Environment environment) {
-        /*for(LinkedList<Object> declaration : this.declarations) {
-            if(declaration == null) continue;
-            Sym value = this.defaultValue();
-            if(declaration.getLast() != null) {
-                Expression expression = (Expression) declaration.getLast();
-                value = (Sym) expression.execute(environment);
-                if(value.getType() != this.type) {
-                    environment.getErrors().add(new GlobalError(row, column, "semantico", value.getValue().toString(), "Tipo incorrecto en declaracion de variable."));
-                    continue;
-                }
-            }
-            if(!environment.insert((String) declaration.getFirst(), value)) {
-                environment.getErrors().add(new GlobalError(row, column, "semantico", (String) declaration.getFirst(), "El identificador de variable ya existe en el ambito"));
-            }
-        }*/
+        try {
+            
+        } catch (Exception e) {
+            environment.getErrors().add(new GlobalError(row, column, "de ejecucion", id, "excepcion no controlada en declaracion de variable"));
+        }
         return null;
     }
-    
+
     private Sym defaultValue() {
         switch(this.type) {
             case entero:
-                return new Sym(EnumType.entero, 0);
+                return new Sym(EnumType.entero, null);
             case doble:
-                return new Sym(EnumType.doble, 0);
+                return new Sym(EnumType.doble, null);
             case booleano:
-                return new Sym(EnumType.booleano, false);
+                return new Sym(EnumType.booleano, null);
             case cadena:
-                return new Sym(EnumType.cadena, "");
+                return new Sym(EnumType.cadena, null);
             default:
-                return new Sym(EnumType.caracter, ' ');
+                return new Sym(EnumType.caracter, null);
         }
     } 
 
     @Override
     public Object analyze(Environment environment) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        Sym operationValue = (this.expression != null) ? (Sym)expression.analyze(environment) : new Sym(EnumType.nulo, "@null");
+        if(id != null) {
+            return simpleDeclaration(environment, operationValue, this.id);
+        } else {
+            if(arraysDec != null) {
+                //Area de declaracion de arreglos
+            } else {
+                multiDeclaration(environment, operationValue);
+            }
+        }
+        return null;
+    }
+
+    private void multiDeclaration(Environment environment, Sym expression) {
+        for(String temporal : idList) {
+            simpleDeclaration(environment, expression, temporal);
+        }
+    }
+
+    /**
+     * Metodo encargado de manejar la declaracion de parametros de funciones
+     * @param environment
+     * @param expression
+     * @return
+     */
+    private Sym simpleDeclaration(Environment environment, Sym expression, String identifier) {
+        if(expression.getType() == EnumType.nulo) {
+            if(environment.insert(identifier, defaultValue())) {
+                return null;
+            } else {
+                environment.getErrors().add(new GlobalError(row, column, "semantico", identifier, "La variable " + identifier + " ya existe en el ambito actual."));
+                return new Sym(EnumType.error, "@error");
+            }
+        } else {
+            if(environment.insert(id, expression)) {
+                return null;
+            } else {
+                environment.getErrors().add(new GlobalError(row, column, "semantico", identifier, "La variable " + identifier + " ya existe en el ambito actual."));
+                return new Sym(EnumType.error, "@error");
+            }
+        }
     }
 }

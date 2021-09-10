@@ -7,6 +7,9 @@ package interpreter.abstract_syntax_tree.instruction;
 
 import interpreter.abstract_syntax_tree.environment.EnumType;
 import interpreter.abstract_syntax_tree.environment.Environment;
+import interpreter.abstract_syntax_tree.environment.GlobalError;
+import interpreter.abstract_syntax_tree.environment.Sym;
+
 import java.io.Serializable;
 import java.util.LinkedList;
 
@@ -49,7 +52,20 @@ public class Function implements Instruction, Serializable {
 
     @Override
     public Object analyze(Environment environment) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return null;
     }
+
+    private Sym methodDefinition() {
     
+    }
+
+    private Sym paramDeclaration(Environment environment) {
+        for (Declaration declaration : paramList) {
+            Sym temporal = (Sym)declaration.analyze(environment);
+            if(temporal != null) {
+                environment.getErrors().add(new GlobalError(row, column, type, value, description))
+            }
+        }
+    }
+
 }
