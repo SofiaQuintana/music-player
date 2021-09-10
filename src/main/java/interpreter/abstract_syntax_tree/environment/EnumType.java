@@ -15,5 +15,6 @@ public enum EnumType {
     booleano,
     caracter,
     cadena,
+    nulo,
     error
 }

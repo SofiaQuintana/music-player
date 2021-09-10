@@ -6,7 +6,11 @@
 package interpreter.abstract_syntax_tree.instruction;
 
 import dummy_classes.Array;
+import interpreter.abstract_syntax_tree.environment.EnumType;
 import interpreter.abstract_syntax_tree.environment.Environment;
+import interpreter.abstract_syntax_tree.environment.GlobalError;
+import interpreter.abstract_syntax_tree.environment.Sym;
+
 import java.io.Serializable;
 
 /**
@@ -42,9 +46,41 @@ public class Assignation implements Instruction, Serializable {
 
     @Override
     public Object analyze(Environment environment) {
-        return null;
+        if(array == null) {
+            if(doesIncrease) { //Aumento
+                return null;
+            } else {
+                Sym value = environment.search(id);
+                if(value != null) {
+                    Sym update = (Sym) expression.analyze(environment);
+                    return dataTypeValueAssignment(environment, update, value);
+                } else {
+                    environment.getErrors().add(new GlobalError(row, column, "semantico", id, "La variable con el id " + id + " no existe en el ambito actual."));
+                    return new Sym(EnumType.error, "@error");
+                }
+            }
+        } else {
+            return null; //Area de arrays
+        }
     }
     
+    private Object dataTypeValueAssignment(Environment environment, Sym finalValue, Sym variable) {
+        if(ImplicitCast.doesHaveSameValueType(finalValue.getType(), finalValue.getValue())) {
+            environment.updateValue(id, finalValue);
+            return null;
+        } else {
+            Object temporalValue = ImplicitCast.implicitCasting(finalValue.getType(), finalValue.getValue());
+            if(temporalValue == null) {
+                String message = "No se pudo realizar el casteo implicito al valor " + finalValue.getValue().toString();
+                environment.getErrors().add(new GlobalError(row, column, "semantico", finalValue.getValue().toString(), message));
+                return new Sym(EnumType.error, "@error");
+            } else {
+                environment.updateValue(id, new Sym(finalValue.getType(), temporalValue));
+                return null;
+            }
+        }
+    }
+
     @Override
     public int getRow() {
         return this.row;
